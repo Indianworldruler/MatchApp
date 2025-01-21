@@ -18,14 +18,6 @@ class LocalDatingApp {
         this.connectButton = document.getElementById('connect-to-id');
         this.connectionStatus = document.getElementById('connection-status');
 
-        // Profile elements
-        this.nameInput = document.getElementById('name-input');
-        this.photoInput = document.getElementById('profile-photo');
-        this.statusSelect = document.getElementById('status-select');
-        this.termSelect = document.getElementById('term-select');
-        this.startDiscoveryBtn = document.getElementById('start-discovery');
-        this.photoPreview = document.getElementById('photo-preview');
-
         // Chat elements
         this.messagesContainer = document.getElementById('messages-container');
         this.messageInput = document.getElementById('message-input');
@@ -41,16 +33,16 @@ class LocalDatingApp {
     }
 
     attachEventListeners() {
-        // Profile setup
-        this.photoInput.addEventListener('change', this.handlePhotoUpload.bind(this));
-        this.startDiscoveryBtn.addEventListener('click', this.startDiscovery.bind(this));
-        
-        // Connection handling
+        // Copy Connection ID
         this.copyIdButton.addEventListener('click', this.copyId.bind(this));
+
+        // Connect to Peer
         this.connectButton.addEventListener('click', this.connectToPeer.bind(this));
+
+        // Accept/Decline Connection
         this.acceptConnectionBtn.addEventListener('click', () => this.handleConnectionRequest(true));
         this.declineConnectionBtn.addEventListener('click', () => this.handleConnectionRequest(false));
-        
+
         // Chat
         this.sendMessageBtn.addEventListener('click', this.sendMessage.bind(this));
         this.messageInput.addEventListener('keypress', (e) => {
@@ -73,7 +65,7 @@ class LocalDatingApp {
 
             this.peer.on('open', (id) => {
                 this.localIdSpan.textContent = id;
-                this.updateStatus('Ready to connect');
+                this.updateStatus('Connection ID generated. Ready to connect.');
             });
 
             this.peer.on('connection', (conn) => {
@@ -91,55 +83,19 @@ class LocalDatingApp {
         }
     }
 
-    async handlePhotoUpload(event) {
-        const file = event.target.files[0];
-        if (file) {
-            try {
-                const base64Image = await this.fileToBase64(file);
-                const img = document.createElement('img');
-                img.src = base64Image;
-                this.photoPreview.innerHTML = '';
-                this.photoPreview.appendChild(img);
-            } catch (error) {
-                console.error('Photo upload error:', error);
-                this.updateStatus('Failed to upload photo');
+    async copyId() {
+        try {
+            const id = this.localIdSpan.textContent;
+            if (id === "Generating...") {
+                this.updateStatus("ID not ready. Please wait.");
+                return;
             }
+            await navigator.clipboard.writeText(id);
+            this.updateStatus('ID copied to clipboard');
+        } catch (error) {
+            console.error('Failed to copy ID:', error);
+            this.updateStatus('Failed to copy ID');
         }
-    }
-
-    fileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    startDiscovery() {
-        if (!this.validateProfile()) return;
-
-        this.userProfile = {
-            name: this.nameInput.value,
-            status: this.statusSelect.value,
-            term: this.termSelect.value,
-            photo: this.photoPreview.querySelector('img')?.src
-        };
-
-        this.showScreen('discovery');
-        this.updateStatus('Discovery mode active');
-    }
-
-    validateProfile() {
-        if (!this.nameInput.value) {
-            this.updateStatus('Please enter your name');
-            return false;
-        }
-        if (!this.statusSelect.value || !this.termSelect.value) {
-            this.updateStatus('Please complete all profile fields');
-            return false;
-        }
-        return true;
     }
 
     async connectToPeer() {
@@ -152,9 +108,9 @@ class LocalDatingApp {
         try {
             const conn = this.peer.connect(remoteId, {
                 reliable: true,
-                metadata: this.userProfile
+                metadata: this.userProfile || { name: "Anonymous User" }
             });
-            
+
             this.setupConnection(conn);
             this.updateStatus('Connecting...');
         } catch (error) {
@@ -164,7 +120,7 @@ class LocalDatingApp {
     }
 
     handleIncomingConnection(conn) {
-        const remoteProfile = conn.metadata;
+        const remoteProfile = conn.metadata || { name: "Anonymous" };
         this.showConnectionRequest(remoteProfile, () => {
             this.setupConnection(conn);
         });
@@ -175,11 +131,11 @@ class LocalDatingApp {
             this.connections.set(conn.peer, conn);
             this.updateStatus('Connected');
             this.showScreen('chat');
-            this.chatPartnerName.textContent = conn.metadata.name;
+            this.chatPartnerName.textContent = conn.metadata?.name || "Chat Partner";
         });
 
         conn.on('data', (data) => {
-            this.handleIncomingMessage(data);
+            this.displayMessage(data, false);
         });
 
         conn.on('close', () => {
@@ -195,22 +151,16 @@ class LocalDatingApp {
 
         const message = {
             text: messageText,
-            sender: this.userProfile.name,
+            sender: "You",
             timestamp: new Date().toISOString()
         };
 
         this.connections.forEach(conn => {
-            if (conn.open) {
-                conn.send(message);
-            }
+            if (conn.open) conn.send(message);
         });
 
         this.displayMessage(message, true);
         this.messageInput.value = '';
-    }
-
-    handleIncomingMessage(message) {
-        this.displayMessage(message, false);
     }
 
     displayMessage(message, isSent) {
@@ -227,7 +177,10 @@ class LocalDatingApp {
         this.showScreen('discovery');
     }
 
-    // UI Utilities
+    updateStatus(message) {
+        this.connectionStatus.textContent = `Status: ${message}`;
+    }
+
     showScreen(screenId) {
         document.querySelectorAll('.screen').forEach(screen => {
             screen.classList.remove('active');
@@ -235,13 +188,8 @@ class LocalDatingApp {
         document.getElementById(screenId).classList.add('active');
     }
 
-    updateStatus(message) {
-        this.connectionStatus.textContent = message;
-    }
-
     showConnectionRequest(profile, acceptCallback) {
-        this.connectionRequestText.textContent = 
-            `${profile.name} wants to connect with you. They are looking for: ${profile.status} (${profile.term})`;
+        this.connectionRequestText.textContent = `${profile.name} wants to connect.`;
         this.connectionModal.classList.add('active');
 
         this.acceptConnectionBtn.onclick = () => {
@@ -252,16 +200,6 @@ class LocalDatingApp {
         this.declineConnectionBtn.onclick = () => {
             this.connectionModal.classList.remove('active');
         };
-    }
-
-    async copyId() {
-        try {
-            await navigator.clipboard.writeText(this.localIdSpan.textContent);
-            this.updateStatus('ID copied to clipboard');
-        } catch (error) {
-            console.error('Failed to copy ID:', error);
-            this.updateStatus('Failed to copy ID');
-        }
     }
 }
 
