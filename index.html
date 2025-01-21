@@ -3,11 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nearby Connect</title>
+    <title>Local Connect</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Initial Profile Setup Section -->
+    <!-- Connection ID Display -->
+    <div id="connection-info" class="info-box">
+        <p>Your Connection ID: <span id="local-id">Generating...</span></p>
+        <button id="copy-id">Copy ID</button>
+    </div>
+
+    <!-- Profile Setup Section -->
     <section id="profile-setup" class="screen active">
         <h1>Create Your Profile</h1>
         <div class="profile-form">
@@ -20,11 +26,11 @@
             </div>
 
             <div class="relationship-status">
-                <h3>Relationship Status</h3>
+                <h3>I am looking for:</h3>
                 <select id="status-select">
                     <option value="">Select Status</option>
-                    <option value="friends">Looking for Friends</option>
-                    <option value="serious">Looking for Serious Relationship</option>
+                    <option value="friends">Friends</option>
+                    <option value="serious">Serious Relationship</option>
                 </select>
             </div>
 
@@ -37,37 +43,39 @@
                 </select>
             </div>
 
-            <button id="complete-profile">Complete Profile</button>
+            <button id="start-discovery">Start Discovery</button>
         </div>
     </section>
 
     <!-- Discovery Section -->
     <section id="discovery" class="screen">
-        <div class="profile-controls">
-            <div class="profile-status">
-                <h2>Your Profile</h2>
-                <div id="user-profile-summary"></div>
-                <button id="toggle-visibility">Go Live</button>
+        <div class="discovery-controls">
+            <button id="toggle-discovery">Stop Discovery</button>
+            <input type="text" id="remote-id-input" placeholder="Enter remote ID to connect">
+            <button id="connect-to-id">Connect</button>
+        </div>
+
+        <div class="nearby-users">
+            <h2>Nearby Users</h2>
+            <div id="users-list">
+                <!-- Users will be listed here -->
             </div>
         </div>
 
-        <div class="nearby-profiles">
-            <h2>People Nearby</h2>
-            <div id="profiles-list">
-                <!-- Nearby profiles will be dynamically added here -->
-            </div>
+        <div id="connection-status" class="status-box">
+            Not connected
         </div>
     </section>
 
     <!-- Chat Section -->
     <section id="chat" class="screen">
         <div class="chat-header">
-            <button id="back-to-discovery">← Back</button>
-            <h2 id="chat-partner-name"></h2>
+            <button id="leave-chat">← Back</button>
+            <h2 id="chat-partner-name">Chat</h2>
         </div>
         
         <div class="chat-messages" id="messages-container">
-            <!-- Messages will be dynamically added here -->
+            <!-- Messages will appear here -->
         </div>
 
         <div class="chat-input">
@@ -76,24 +84,20 @@
         </div>
     </section>
 
-    <!-- Match Request Modal -->
-    <div id="match-modal" class="modal">
+    <!-- Connection Modal -->
+    <div id="connection-modal" class="modal">
         <div class="modal-content">
-            <h3>New Match Request</h3>
-            <p id="match-request-text"></p>
+            <h3>Connection Request</h3>
+            <p id="connection-request-text"></p>
             <div class="modal-buttons">
-                <button id="accept-match">Accept</button>
-                <button id="decline-match">Decline</button>
+                <button id="accept-connection">Accept</button>
+                <button id="decline-connection">Decline</button>
             </div>
         </div>
     </div>
 
-    <!-- Connection Status -->
-    <div id="connection-status" class="status-bar">
-        <span id="status-message"></span>
-    </div>
-
-    <!-- Scripts -->
-    <script src="script.js"></script>
+    <!-- Add PeerJS library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
