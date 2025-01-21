@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nearby Connect</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Initial Profile Setup Section -->
+    <section id="profile-setup" class="screen active">
+        <h1>Create Your Profile</h1>
+        <div class="profile-form">
+            <input type="text" id="name-input" placeholder="Enter your name" required>
+            
+            <div class="photo-upload">
+                <label for="profile-photo">Upload Photo (Optional)</label>
+                <input type="file" id="profile-photo" accept="image/*">
+                <div id="photo-preview"></div>
+            </div>
+
+            <div class="relationship-status">
+                <h3>Relationship Status</h3>
+                <select id="status-select">
+                    <option value="">Select Status</option>
+                    <option value="friends">Looking for Friends</option>
+                    <option value="serious">Looking for Serious Relationship</option>
+                </select>
+            </div>
+
+            <div class="term-preference">
+                <h3>Term Preference</h3>
+                <select id="term-select">
+                    <option value="">Select Term</option>
+                    <option value="long">Long Term</option>
+                    <option value="short">Short Term</option>
+                </select>
+            </div>
+
+            <button id="complete-profile">Complete Profile</button>
+        </div>
+    </section>
+
+    <!-- Discovery Section -->
+    <section id="discovery" class="screen">
+        <div class="profile-controls">
+            <div class="profile-status">
+                <h2>Your Profile</h2>
+                <div id="user-profile-summary"></div>
+                <button id="toggle-visibility">Go Live</button>
+            </div>
+        </div>
+
+        <div class="nearby-profiles">
+            <h2>People Nearby</h2>
+            <div id="profiles-list">
+                <!-- Nearby profiles will be dynamically added here -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Chat Section -->
+    <section id="chat" class="screen">
+        <div class="chat-header">
+            <button id="back-to-discovery">← Back</button>
+            <h2 id="chat-partner-name"></h2>
+        </div>
+        
+        <div class="chat-messages" id="messages-container">
+            <!-- Messages will be dynamically added here -->
+        </div>
+
+        <div class="chat-input">
+            <input type="text" id="message-input" placeholder="Type your message...">
+            <button id="send-message">Send</button>
+        </div>
+    </section>
+
+    <!-- Match Request Modal -->
+    <div id="match-modal" class="modal">
+        <div class="modal-content">
+            <h3>New Match Request</h3>
+            <p id="match-request-text"></p>
+            <div class="modal-buttons">
+                <button id="accept-match">Accept</button>
+                <button id="decline-match">Decline</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div id="connection-status" class="status-bar">
+        <span id="status-message"></span>
+    </div>
+
+    <!-- Scripts -->
+    <script src="app.js"></script>
+</body>
+</html>
