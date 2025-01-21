@@ -1,89 +1,125 @@
-// Configuration and State Management
-const configuration = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-    ]
-};
-
-class DatingApp {
+// Initialize PeerJS and handle connections
+class LocalDatingApp {
     constructor() {
+        this.peer = null;
+        this.connection = null;
         this.userProfile = null;
-        this.connections = new Map(); // Stores RTCPeerConnection objects
-        this.dataChannels = new Map(); // Stores RTCDataChannel objects
-        this.nearbyUsers = new Set();
-        this.currentChatPartner = null;
+        this.connections = new Map();
         this.initializeElements();
         this.attachEventListeners();
+        this.initializePeerConnection();
     }
 
     initializeElements() {
-        // Profile setup elements
+        // Connection elements
+        this.localIdSpan = document.getElementById('local-id');
+        this.copyIdButton = document.getElementById('copy-id');
+        this.remoteIdInput = document.getElementById('remote-id-input');
+        this.connectButton = document.getElementById('connect-to-id');
+        this.connectionStatus = document.getElementById('connection-status');
+
+        // Profile elements
         this.nameInput = document.getElementById('name-input');
         this.photoInput = document.getElementById('profile-photo');
         this.statusSelect = document.getElementById('status-select');
         this.termSelect = document.getElementById('term-select');
-        this.completeProfileBtn = document.getElementById('complete-profile');
+        this.startDiscoveryBtn = document.getElementById('start-discovery');
         this.photoPreview = document.getElementById('photo-preview');
-
-        // Discovery elements
-        this.toggleVisibilityBtn = document.getElementById('toggle-visibility');
-        this.profilesList = document.getElementById('profiles-list');
 
         // Chat elements
         this.messagesContainer = document.getElementById('messages-container');
         this.messageInput = document.getElementById('message-input');
         this.sendMessageBtn = document.getElementById('send-message');
+        this.leaveChatBtn = document.getElementById('leave-chat');
+        this.chatPartnerName = document.getElementById('chat-partner-name');
 
-        // Modal elements
-        this.matchModal = document.getElementById('match-modal');
-        this.acceptMatchBtn = document.getElementById('accept-match');
-        this.declineMatchBtn = document.getElementById('decline-match');
+        // Connection modal
+        this.connectionModal = document.getElementById('connection-modal');
+        this.connectionRequestText = document.getElementById('connection-request-text');
+        this.acceptConnectionBtn = document.getElementById('accept-connection');
+        this.declineConnectionBtn = document.getElementById('decline-connection');
     }
 
     attachEventListeners() {
         // Profile setup
         this.photoInput.addEventListener('change', this.handlePhotoUpload.bind(this));
-        this.completeProfileBtn.addEventListener('click', this.completeProfile.bind(this));
+        this.startDiscoveryBtn.addEventListener('click', this.startDiscovery.bind(this));
         
-        // Discovery
-        this.toggleVisibilityBtn.addEventListener('click', this.toggleVisibility.bind(this));
+        // Connection handling
+        this.copyIdButton.addEventListener('click', this.copyId.bind(this));
+        this.connectButton.addEventListener('click', this.connectToPeer.bind(this));
+        this.acceptConnectionBtn.addEventListener('click', () => this.handleConnectionRequest(true));
+        this.declineConnectionBtn.addEventListener('click', () => this.handleConnectionRequest(false));
         
         // Chat
         this.sendMessageBtn.addEventListener('click', this.sendMessage.bind(this));
         this.messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.sendMessage();
         });
-
-        // Match requests
-        this.acceptMatchBtn.addEventListener('click', this.acceptMatch.bind(this));
-        this.declineMatchBtn.addEventListener('click', this.declineMatch.bind(this));
+        this.leaveChatBtn.addEventListener('click', this.leaveChat.bind(this));
     }
 
-    // Profile Management
+    async initializePeerConnection() {
+        try {
+            this.peer = new Peer({
+                debug: 2,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            this.peer.on('open', (id) => {
+                this.localIdSpan.textContent = id;
+                this.updateStatus('Ready to connect');
+            });
+
+            this.peer.on('connection', (conn) => {
+                this.handleIncomingConnection(conn);
+            });
+
+            this.peer.on('error', (error) => {
+                console.error('PeerJS error:', error);
+                this.updateStatus('Connection error. Please try again.');
+            });
+
+        } catch (error) {
+            console.error('PeerJS initialization error:', error);
+            this.updateStatus('Failed to initialize connection');
+        }
+    }
+
     async handlePhotoUpload(event) {
         const file = event.target.files[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
+            try {
+                const base64Image = await this.fileToBase64(file);
                 const img = document.createElement('img');
-                img.src = e.target.result;
+                img.src = base64Image;
                 this.photoPreview.innerHTML = '';
                 this.photoPreview.appendChild(img);
-                this.userProfile = { ...this.userProfile, photo: e.target.result };
-            };
-            reader.readAsDataURL(file);
+            } catch (error) {
+                console.error('Photo upload error:', error);
+                this.updateStatus('Failed to upload photo');
+            }
         }
     }
 
-    completeProfile() {
-        if (!this.nameInput.value) {
-            this.showStatus('Please enter your name');
-            return;
-        }
+    fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    startDiscovery() {
+        if (!this.validateProfile()) return;
 
         this.userProfile = {
-            id: crypto.randomUUID(),
             name: this.nameInput.value,
             status: this.statusSelect.value,
             term: this.termSelect.value,
@@ -91,130 +127,104 @@ class DatingApp {
         };
 
         this.showScreen('discovery');
-        this.initializeWebRTC();
+        this.updateStatus('Discovery mode active');
     }
 
-    // WebRTC Implementation
-    async initializeWebRTC() {
+    validateProfile() {
+        if (!this.nameInput.value) {
+            this.updateStatus('Please enter your name');
+            return false;
+        }
+        if (!this.statusSelect.value || !this.termSelect.value) {
+            this.updateStatus('Please complete all profile fields');
+            return false;
+        }
+        return true;
+    }
+
+    async connectToPeer() {
+        const remoteId = this.remoteIdInput.value.trim();
+        if (!remoteId) {
+            this.updateStatus('Please enter a connection ID');
+            return;
+        }
+
         try {
-            // Create a broadcast channel for discovering nearby users
-            this.broadcastChannel = new BroadcastChannel('nearby-discovery');
-            this.broadcastChannel.onmessage = this.handleBroadcastMessage.bind(this);
-            
-            this.showStatus('WebRTC initialized');
-        } catch (error) {
-            this.showStatus('Failed to initialize WebRTC');
-            console.error('WebRTC initialization error:', error);
-        }
-    }
-
-    async createPeerConnection(targetId) {
-        const peerConnection = new RTCPeerConnection(configuration);
-        this.connections.set(targetId, peerConnection);
-
-        // Create data channel
-        const dataChannel = peerConnection.createDataChannel('chat');
-        this.setupDataChannel(dataChannel, targetId);
-
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                this.broadcastChannel.postMessage({
-                    type: 'ice-candidate',
-                    candidate: event.candidate,
-                    from: this.userProfile.id,
-                    to: targetId
-                });
-            }
-        };
-
-        return peerConnection;
-    }
-
-    setupDataChannel(dataChannel, partnerId) {
-        this.dataChannels.set(partnerId, dataChannel);
-
-        dataChannel.onopen = () => {
-            this.showStatus('Connected to chat');
-            this.showScreen('chat');
-        };
-
-        dataChannel.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            this.displayMessage(message, false);
-        };
-
-        dataChannel.onclose = () => {
-            this.showStatus('Chat disconnected');
-            this.dataChannels.delete(partnerId);
-        };
-    }
-
-    // Discovery and Matching
-    toggleVisibility() {
-        const isOnline = this.toggleVisibilityBtn.classList.toggle('offline');
-        if (isOnline) {
-            this.broadcastPresence();
-            this.toggleVisibilityBtn.textContent = 'Go Offline';
-        } else {
-            this.broadcastChannel.postMessage({
-                type: 'user-offline',
-                userId: this.userProfile.id
+            const conn = this.peer.connect(remoteId, {
+                reliable: true,
+                metadata: this.userProfile
             });
-            this.toggleVisibilityBtn.textContent = 'Go Live';
+            
+            this.setupConnection(conn);
+            this.updateStatus('Connecting...');
+        } catch (error) {
+            console.error('Connection error:', error);
+            this.updateStatus('Failed to connect');
         }
     }
 
-    broadcastPresence() {
-        this.broadcastChannel.postMessage({
-            type: 'user-online',
-            profile: this.userProfile
+    handleIncomingConnection(conn) {
+        const remoteProfile = conn.metadata;
+        this.showConnectionRequest(remoteProfile, () => {
+            this.setupConnection(conn);
         });
     }
 
-    handleBroadcastMessage(event) {
-        const data = event.data;
-        switch (data.type) {
-            case 'user-online':
-                this.addNearbyUser(data.profile);
-                break;
-            case 'user-offline':
-                this.removeNearbyUser(data.userId);
-                break;
-            case 'match-request':
-                if (data.to === this.userProfile.id) {
-                    this.showMatchRequest(data.from);
-                }
-                break;
-            case 'ice-candidate':
-                if (data.to === this.userProfile.id) {
-                    this.handleIceCandidate(data);
-                }
-                break;
-        }
+    setupConnection(conn) {
+        conn.on('open', () => {
+            this.connections.set(conn.peer, conn);
+            this.updateStatus('Connected');
+            this.showScreen('chat');
+            this.chatPartnerName.textContent = conn.metadata.name;
+        });
+
+        conn.on('data', (data) => {
+            this.handleIncomingMessage(data);
+        });
+
+        conn.on('close', () => {
+            this.connections.delete(conn.peer);
+            this.updateStatus('Disconnected');
+            this.showScreen('discovery');
+        });
     }
 
-    // Chat Implementation
     sendMessage() {
+        const messageText = this.messageInput.value.trim();
+        if (!messageText) return;
+
         const message = {
-            text: this.messageInput.value,
-            timestamp: new Date().toISOString(),
-            sender: this.userProfile.name
+            text: messageText,
+            sender: this.userProfile.name,
+            timestamp: new Date().toISOString()
         };
 
-        const dataChannel = this.dataChannels.get(this.currentChatPartner);
-        if (dataChannel?.readyState === 'open') {
-            dataChannel.send(JSON.stringify(message));
-            this.displayMessage(message, true);
-            this.messageInput.value = '';
-        }
+        this.connections.forEach(conn => {
+            if (conn.open) {
+                conn.send(message);
+            }
+        });
+
+        this.displayMessage(message, true);
+        this.messageInput.value = '';
+    }
+
+    handleIncomingMessage(message) {
+        this.displayMessage(message, false);
     }
 
     displayMessage(message, isSent) {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${isSent ? 'sent' : 'received'}`;
-        messageElement.textContent = `${message.sender}: ${message.text}`;
+        messageElement.textContent = message.text;
         this.messagesContainer.appendChild(messageElement);
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }
+
+    leaveChat() {
+        this.connections.forEach(conn => conn.close());
+        this.connections.clear();
+        this.showScreen('discovery');
     }
 
     // UI Utilities
@@ -225,49 +235,37 @@ class DatingApp {
         document.getElementById(screenId).classList.add('active');
     }
 
-    showStatus(message, duration = 3000) {
-        const statusBar = document.getElementById('connection-status');
-        const statusMessage = document.getElementById('status-message');
-        statusMessage.textContent = message;
-        statusBar.classList.add('active');
-        setTimeout(() => statusBar.classList.remove('active'), duration);
+    updateStatus(message) {
+        this.connectionStatus.textContent = message;
     }
 
-    addNearbyUser(profile) {
-        if (profile.id === this.userProfile.id) return;
-        
-        const profileCard = document.createElement('div');
-        profileCard.className = 'profile-card';
-        profileCard.innerHTML = `
-            <img src="${profile.photo || '/api/placeholder/100/100'}" alt="${profile.name}">
-            <h3>${profile.name}</h3>
-            <p>Looking for: ${profile.status}</p>
-            <p>Term: ${profile.term}</p>
-            <button onclick="app.requestMatch('${profile.id}')">Request Match</button>
-        `;
-        
-        this.profilesList.appendChild(profileCard);
-        this.nearbyUsers.add(profile.id);
+    showConnectionRequest(profile, acceptCallback) {
+        this.connectionRequestText.textContent = 
+            `${profile.name} wants to connect with you. They are looking for: ${profile.status} (${profile.term})`;
+        this.connectionModal.classList.add('active');
+
+        this.acceptConnectionBtn.onclick = () => {
+            acceptCallback();
+            this.connectionModal.classList.remove('active');
+        };
+
+        this.declineConnectionBtn.onclick = () => {
+            this.connectionModal.classList.remove('active');
+        };
     }
 
-    removeNearbyUser(userId) {
-        this.nearbyUsers.delete(userId);
-        // Remove profile card from UI
-        const profileCards = this.profilesList.children;
-        for (let card of profileCards) {
-            if (card.querySelector('button').onclick.toString().includes(userId)) {
-                card.remove();
-                break;
-            }
+    async copyId() {
+        try {
+            await navigator.clipboard.writeText(this.localIdSpan.textContent);
+            this.updateStatus('ID copied to clipboard');
+        } catch (error) {
+            console.error('Failed to copy ID:', error);
+            this.updateStatus('Failed to copy ID');
         }
-    }
-
-    // Initialize the app
-    static init() {
-        const app = new DatingApp();
-        window.app = app; // Make it globally accessible
     }
 }
 
-// Start the application
-document.addEventListener('DOMContentLoaded', DatingApp.init);
+// Initialize the app when the document is ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.app = new LocalDatingApp();
+});
